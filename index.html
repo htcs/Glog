@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>G - Log - Meter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { text-align: center; font-family: Arial, sans-serif; }
+
+        h1 { margin: 0; padding: 0; }
+
+        .g-display { display: flex; height: min(75vw, 55vh);
+                     justify-content: center; align-items: center;
+                     font-size: min(70vw, 66vh); font-weight: bold;
+                     overflow: hidden;
+        }
+
+        .g-box { border: 1px solid #ccc;  border-radius: 5px;
+                 display: flex;           padding: 10px;
+                 width: 45vw;             height: min(25vh, 20vw);
+                 justify-content: center; align-items: center;
+                 font-size: 15vw;         font-weight: bold;
+        }
+
+        .g-values { display: flex; justify-content: center; margin: 0 10vw; gap: 10vw; }
+    </style>
+</head>
+<body style="display: flex; flex-direction: column; min-height: 100vh; margin: 0;">
+    <h1>G - <a href="log.html">Log</a> - Meter</h1>
+
+    <div id="start" style="flex: 1;">
+        <div class="g-display" id="curG">0.0</div>
+
+        <div class="g-values">
+            <div class="g-box"> <div id="minG">0.0</div> </div>
+            <div class="g-box"> <div id="maxG">0.0</div> </div>
+        </div>
+
+        <p id="status">Sound Start - Tap Screen</p>
+    </div>
+
+    <script>
+        // Elements
+        const curG = document.getElementById("curG");
+        const minG = document.getElementById("minG");
+        const maxG = document.getElementById("maxG");
+        const status = document.getElementById("status");
+
+        // Audio
+        let audio, gain, osci, intr, puls = 0, dur = 0, last = 0;
+        let minGValue = 0, maxGValue = 0, lastG = 0;
+        let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+        // G-force Measurement
+        function startMotionTracking() {
+            window.addEventListener("devicemotion", (e) => {
+                if (e.timeStamp - last < 50) return;
+                last = e.timeStamp;
+
+                const acc = e.accelerationIncludingGravity;
+                const g = Math.sqrt(acc.x ** 2 + acc.y ** 2 + acc.z ** 2) / 9.81;
+
+                if ( g >= 2 ) localStorage.setItem( Date.now().toString(),
+                                                    g.toFixed(3).toString() );
+
+                if ( g < 0.2 || Math.abs( g - lastG ) < 0.2 ) return;
+                lastG = g;
+
+                curG.textContent = g.toFixed(1);
+                if (g < minGValue || minGValue === 0) minGValue = g;
+                if (g > maxGValue) maxGValue = g;
+                minG.textContent = minGValue.toFixed(1);
+                maxG.textContent = maxGValue.toFixed(1);
+
+                if (g >= 3 && audio) {
+                    playTone(g);
+                    status.textContent = "Active: " + g.toFixed(1) + "G";
+                } else  {  stopTone();  status.textContent = "Measure Gs"; }
+            }, { passive: false } );
+            status.textContent = "Wait for Gs - Smartphone ?";
+            document.getElementById("maxG") .addEventListener( "click", () =>
+            {   maxG.textContent = ( maxGValue = 0 ) .toFixed(1);   }         );
+        }
+
+        function playTone(g = 0) {
+            if ( ( g -= 3 ) < 0) { stopTone(); return; }
+            dur = ( g = Math.trunc( g ) ) * 2 + 1;
+            if (!osci) {
+                gain = new GainNode(audio, { gain: 0 });  osci = new OscillatorNode(
+                    audio, { type: 'sine', frequency: 700 + (g * 240) } ); 
+                osci.connect(gain).connect(audio.destination);  osci.start();
+                intr = setInterval(() => { gain.gain.value = 1; if(dur < 5) gain.gain
+                    .setValueAtTime(0, audio.currentTime + dur * 0.025); }, 100);
+            } else {
+                osci.frequency.value = 700 + (g * 240);
+            }
+        }
+
+        function stopTone() {
+            if (intr) clearInterval(intr);
+            if (gain) { gain.gain.value = 0; gain.disconnect(audio.destination); }
+            if (osci) { osci.stop(); osci.disconnect(gain); }
+            intr = gain =  osci = null;
+        }
+
+        async function iosPermission() { try {
+            const permission = await DeviceMotionEvent.requestPermission();
+            if (permission === "granted") { testGs(); return; }
+            status.textContent = "Rejected - Close browser";
+        } catch (e) { status.textContent = "Tap for Gs: " + e.message; }
+            document.getElementById("start")
+                .addEventListener("click", iosPermission, {once:true});
+        }
+
+        function testG(g) { playTone(g); curG.textContent = g.toFixed(1); }
+
+        function testGs() {
+            status.textContent = "Sound On - Demo";
+            testG(3); setTimeout(testG, 3000, 4); setTimeout(testG, 6000, 5);
+            setTimeout(testG, 9000, 6); setTimeout(stopTone, 12000);
+            setTimeout(startMotionTracking, 14000);
+        }
+
+        function initAudio() {
+            audio = new (window.AudioContext || window.webkitAudioContext)();
+            status.textContent = "Sound On";
+            if ( isIOS ) { 
+                playTone(3); setTimeout(stopTone, 50);
+                setTimeout(iosPermission, 90);
+            }
+            else testGs();
+        }
+
+        // Init
+        document.getElementById("start").addEventListener("click", initAudio, {once:true});
+    </script>
+</body>
+</html>

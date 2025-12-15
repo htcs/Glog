@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head><title>Logged Gs Ticks</title></head>
+<body>
+  <h1>Logged Gs Ticks</h1>
+  <p id="items"></p>
+
+  <script>
+    document.getElementById("items").innerHTML =
+      Object.keys(localStorage) .filter(K => !isNaN(K)) .sort((a,b) => a - b)
+        .map(K => `${K} ${localStorage.getItem(K)}<br>` ) .join("");
+  </script>
+</body>
+</html>
