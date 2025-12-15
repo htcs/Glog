@@ -46,35 +46,54 @@
         const status = document.getElementById("status");
 
         // Audio
-        let audio, gain, osci, intr, puls = 0, dur = 0, last = 0;
+        let audio, gain, osci, intr
+        let puls = 0, dur = 0, last = 0, last2 = 0;
         let minGValue = 0, maxGValue = 0, lastG = 0;
         let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        let Demo = [ 6, 5, 4, 3 ], DemoP = 9;
 
         // G-force Measurement
         function startMotionTracking() {
             window.addEventListener("devicemotion", (e) => {
-                if (e.timeStamp - last < 50) return;
-                last = e.timeStamp;
+                if (e.timeStamp - last < 48) return;
+                let g ; last = e.timeStamp;
 
-                const acc = e.accelerationIncludingGravity;
-                const g = Math.sqrt(acc.x ** 2 + acc.y ** 2 + acc.z ** 2) / 9.81;
+                if (DemoP < 9) { DemoP++ ; return }
+                if (Demo) {
+                    g = Demo.pop() ; DemoP = 9
+                }
+                else
+                {   const acc = e.accelerationIncludingGravity;
+                    g = Math.sqrt(acc.x ** 2 + acc.y ** 2 + acc.z ** 2) / 9.81;
 
-                if ( g >= 2 ) localStorage.setItem( Date.now().toString(),
-                                                    g.toFixed(3).toString() );
+                    if ( g >= 2 ) localStorage.setItem( Date.now().toString(),
+                                                        g.toFixed(3).toString() );
 
-                if ( g < 0.2 || Math.abs( g - lastG ) < 0.2 ) return;
-                lastG = g;
+                    if ( g < 0.2 || Math.abs( g - lastG ) < 0.2 ) return;
+                    lastG = g;
+
+                    if (g < minGValue || minGValue === 0) minGValue = g;
+                    if (g > maxGValue) maxGValue = g;
+                    minG.textContent = minGValue.toFixed(1);
+                    maxG.textContent = maxGValue.toFixed(1);
+                }
 
                 curG.textContent = g.toFixed(1);
-                if (g < minGValue || minGValue === 0) minGValue = g;
-                if (g > maxGValue) maxGValue = g;
-                minG.textContent = minGValue.toFixed(1);
-                maxG.textContent = maxGValue.toFixed(1);
+
+                if (e.timeStamp - last2 < 98) return;
+                last2 = e.timeStamp;
 
                 if (g >= 3 && audio) {
                     playTone(g);
+
+                    gain.gain.value = 1;
+                    gain.gain.setValueAtTime(0, audio.currentTime + dur * 0.025);
+
                     status.textContent = "Active: " + g.toFixed(1) + "G";
-                } else  {  stopTone();  status.textContent = "Measure Gs"; }
+                } else {
+                    stopTone();
+                    status.textContent = "Measure Gs";
+                }
             }, { passive: false } );
             status.textContent = "Wait for Gs - Smartphone ?";
             document.getElementById("maxG") .addEventListener( "click", () =>
@@ -82,24 +101,26 @@
         }
 
         function playTone(g = 0) {
-            if ( ( g -= 3 ) < 0) { stopTone(); return; }
-            dur = ( g = Math.trunc( g ) ) * 2 + 1;
+            if ((g -= 3) < 0) { stopTone(); return; }
+
+            g = Math.trunc(g);
+            dur = g * 2 + 1;
+
             if (!osci) {
-                gain = new GainNode(audio, { gain: 0 });  osci = new OscillatorNode(
-                    audio, { type: 'sine', frequency: 700 + (g * 240) } ); 
-                osci.connect(gain).connect(audio.destination);  osci.start();
-                intr = setInterval(() => { gain.gain.value = 1; if(dur < 5) gain.gain
-                    .setValueAtTime(0, audio.currentTime + dur * 0.025); }, 100);
+                gain = new GainNode(audio, { gain: 0 });
+                osci = new OscillatorNode(audio, {
+                    type: 'sine',
+                    frequency: 700 + (g * 240)
+                });
+                osci.connect(gain).connect(audio.destination);
+                osci.start();
             } else {
                 osci.frequency.value = 700 + (g * 240);
             }
         }
 
         function stopTone() {
-            if (intr) clearInterval(intr);
-            if (gain) { gain.gain.value = 0; gain.disconnect(audio.destination); }
-            if (osci) { osci.stop(); osci.disconnect(gain); }
-            intr = gain =  osci = null;
+            if (gain) gain.gain.value = 0;
         }
 
         async function iosPermission() { try {
@@ -115,8 +136,8 @@
 
         function testGs() {
             status.textContent = "Sound On - Demo";
-            testG(3); setTimeout(testG, 3000, 4); setTimeout(testG, 6000, 5);
-            setTimeout(testG, 9000, 6); setTimeout(stopTone, 12000);
+            //testG(3); setTimeout(testG, 3000, 4); setTimeout(testG, 6000, 5);
+            //setTimeout(testG, 9000, 6); setTimeout(stopTone, 12000);
             setTimeout(startMotionTracking, 14000);
         }
 
